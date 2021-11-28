@@ -1,5 +1,3 @@
-use std::default;
-
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Location {
   file: String,

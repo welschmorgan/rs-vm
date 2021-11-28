@@ -1,5 +1,5 @@
 use crate::{error::Error, result::Result};
-use std::{ffi::OsStr, fs::read_to_string, path::{Path, PathBuf}, time::Duration};
+use std::{ffi::OsStr, fs::read_to_string, path::{Path, PathBuf}};
 
 #[derive(Debug)]
 pub enum ScriptState {

@@ -1,5 +1,5 @@
 use std::time::Duration;
-use std::{ffi::OsStr, fs::read_to_string, path::Path};
+use std::{path::Path};
 
 use crate::script::Script;
 use crate::result::Result;
@@ -56,6 +56,7 @@ impl Vm {
     Ok(self.scripts.get_mut(n).unwrap())
   }
 
+  #[allow(unreachable_code)]
   pub fn run(&mut self) -> Result<()> {
     loop {
       std::thread::sleep(Duration::from_millis(50));
