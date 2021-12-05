@@ -1,7 +1,7 @@
 use crate::{error::Error, result::Result};
 use std::{ffi::OsStr, fs::read_to_string, path::{Path, PathBuf}};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ScriptState {
   INITIAL,
   LOADED,
@@ -80,6 +80,14 @@ impl Script {
 
   pub fn path_mut(&mut self) -> &mut PathBuf {
     &mut self.path
+  }
+
+  pub fn state(&self) -> &ScriptState {
+    &self.state
+  }
+
+  pub fn state_mut(&mut self) -> &mut ScriptState {
+    &mut self.state
   }
 
   pub fn content(&self) -> Option<&String> {

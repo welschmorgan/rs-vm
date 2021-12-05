@@ -1,10 +1,12 @@
 use std::cell::RefCell;
-use std::rc::{Rc};
+use std::rc::Rc;
+
+use enum_iterator::IntoEnumIterator;
 
 use crate::error::Error;
 use crate::location::Location;
 use crate::result::Result;
-use crate::script::Script;
+use crate::script::{Script, ScriptState};
 
 use super::{Keyword, Node, NodeKind, NodePtr, AST};
 
@@ -35,6 +37,48 @@ impl Default for Parser {
       keywords: Default::default(),
       options: Default::default(),
     }
+  }
+}
+
+#[derive(IntoEnumIterator, Copy, Clone, PartialEq, Debug)]
+pub enum Symbol {
+  LParent,
+  RParent,
+  LBrace,
+  RBrace,
+  LBracket,
+  RBracket,
+  Comma,
+  SemiColon,
+  Tab,
+  Space,
+  NewLine,
+}
+
+impl Symbol {
+  pub fn repr(&self) -> char {
+    match *self {
+      Self::LParent => '(',
+      Self::RParent => ')',
+      Self::LBrace => '{',
+      Self::RBrace => '}',
+      Self::LBracket => '[',
+      Self::RBracket => ']',
+      Self::Comma => ',',
+      Self::SemiColon => ';',
+      Self::Tab => '\t',
+      Self::Space => ' ',
+      Self::NewLine => '\n',
+    }
+  }
+
+  pub fn parse(ch: char) -> Option<Symbol> {
+    for sym in Self::into_enum_iter() {
+      if sym.repr() == ch {
+        return Some(sym);
+      }
+    }
+    None
   }
 }
 
@@ -100,7 +144,7 @@ impl Parser {
     self.cur_scope.borrow().kind().clone()
   }
 
-  pub fn parse(&mut self, s: &Script) -> Result<AST> {
+  pub fn parse(&mut self, s: &mut Script) -> Result<AST> {
     self.reset();
     s.content().ok_or_else(|| {
       Error::IO(std::io::Error::new(
@@ -109,7 +153,9 @@ impl Parser {
       ))
     })?;
     *self.location.file_mut() = s.name().clone();
+    *self.root_scope.borrow_mut().location_mut() = self.location.clone();
     let ch_it = s.content().unwrap().chars();
+    let mut is_symbol = false;
     for ch in ch_it {
       if self.has_option(Options::Debug) {
         println!("parse: {}", ch);
@@ -119,26 +165,31 @@ impl Parser {
       } else if ch == '\'' || ch == '"' {
         self.parse_quote(ch)?;
       } else {
-        match ch {
-          '(' => self.parse_lparen(ch),
-          ')' => self.parse_rparen(ch),
-          '{' => self.parse_lbrace(ch),
-          '}' => self.parse_rbrace(ch),
-          ',' => self.parse_comma(ch),
-          ';' => self.parse_semicolon(ch),
-          '\t' | ' ' => self.parse_space(ch),
-          '\n' => self.parse_eol(ch),
-          _ => self.parse_unknown(ch),
-        }?;
-        if ch.is_alphanumeric() {
-          self.accu.push(ch);
-        } else {
-          self.parse_keyword()?;
+        is_symbol = false;
+        if let Some(sym) = Symbol::parse(ch) {
+          is_symbol = true;
+          match sym {
+            Symbol::LParent => self.parse_lparen(ch),
+            Symbol::RParent => self.parse_rparen(ch),
+            Symbol::LBrace => self.parse_lbrace(ch),
+            Symbol::RBrace => self.parse_rbrace(ch),
+            Symbol::LBracket => self.parse_lbracket(ch),
+            Symbol::RBracket => self.parse_rbracket(ch),
+            Symbol::Comma => self.parse_comma(ch),
+            Symbol::SemiColon => self.parse_semicolon(ch),
+            Symbol::Tab | Symbol::Space => self.parse_space(ch),
+            Symbol::NewLine => self.parse_eol(ch),
+          }?;
         }
+        if !is_symbol {
+          self.accu.push(ch);
+        }
+        self.parse_keyword();
       }
       *self.location.offset_mut() += 1;
       *self.location.column_mut() += 1;
     }
+    *s.state_mut() = ScriptState::PARSED;
     if self.has_option(Options::Debug) {
       self.dump(self.root_scope.clone(), 0);
     }
@@ -168,7 +219,7 @@ impl Parser {
     }
   }
 
-  fn parse_keyword(&mut self) -> Result<()> {
+  fn parse_keyword(&mut self) -> Option<Keyword> {
     if self.accu.len() > 0 {
       if self.has_option(Options::Debug) {
         println!("parse kw: {:?}", self.accu);
@@ -176,24 +227,28 @@ impl Parser {
       if let Some(kw) = Keyword::parse(&self.accu) {
         match kw {
           Keyword::Function => {
-            self.push_scope(NodeKind::Function)?;
+            self.push_scope(NodeKind::Function);
           }
           Keyword::Class => {
-            self.push_scope(NodeKind::Class)?;
+            self.push_scope(NodeKind::Class);
           }
           Keyword::Enum => {
-            self.push_scope(NodeKind::Enum)?;
+            self.push_scope(NodeKind::Enum);
           }
           Keyword::Private => {}
           Keyword::Protected => {}
           Keyword::Public => {}
           Keyword::Return => {}
+          Keyword::Throw => {}
+          Keyword::Let => {}
+          Keyword::Const => {}
         };
         self.keywords.push(kw);
         self.accu.clear();
+        return Some(kw);
       }
     }
-    Ok(())
+    None
   }
 
   fn parse_comma(&mut self, _ch: char) -> Result<()> {
@@ -235,7 +290,7 @@ impl Parser {
           self.location.clone(),
         ));
       }
-      self.push_scope(NodeKind::FunctionParams)?;
+      self.push_scope(NodeKind::FunctionParams);
     }
     Ok(())
   }
@@ -253,19 +308,32 @@ impl Parser {
   fn parse_lbrace(&mut self, _ch: char) -> Result<()> {
     let mut kind = NodeKind::None;
     match self.cur_scope_kind() {
-      NodeKind::Function => kind = NodeKind::FunctionImpl,
+      NodeKind::Function => {
+        kind = NodeKind::FunctionImpl;
+      }
       _ => {}
     }
-    self.push_scope(kind)?;
+    self.keywords.clear();
+    self.push_scope(kind);
     Ok(())
   }
 
   fn parse_rbrace(&mut self, _ch: char) -> Result<()> {
+    if !self.accu.is_empty() {
+      self.parse_expr()?;
+    }
     self.pop_scope()?;
     Ok(())
   }
 
+  fn accu_empty(&self) -> bool {
+    self.accu.trim().len() == 0
+  }
+
   fn parse_semicolon(&mut self, _ch: char) -> Result<()> {
+    if !self.accu_empty() {
+      self.parse_expr()?;
+    }
     self.keywords.clear();
     Ok(())
   }
@@ -280,7 +348,9 @@ impl Parser {
   }
 
   fn parse_space(&mut self, _ch: char) -> Result<()> {
-    self.parse_keyword()?;
+    // if self.parse_keyword().is_none() {
+      // self.accu.push(_ch);
+    // }
     Ok(())
   }
 
@@ -293,37 +363,43 @@ impl Parser {
     Ok(())
   }
 
-  fn parse_unknown(&mut self, _ch: char) -> Result<()> {
-    Ok(())
-  }
-
-  fn push_scope(&mut self, kind: NodeKind) -> Result<NodePtr> {
+  fn push_scope(&mut self, kind: NodeKind) -> NodePtr {
     let last_scope = self.cur_scope.clone();
     self.cur_scope = last_scope
       .borrow_mut()
       .create_child(kind, self.location.clone())
       .clone();
     *self.cur_scope.borrow_mut().parent_mut() = Some(last_scope.clone());
-    println!(
-      "push_scope: {:?} -> {:?}",
-      last_scope.borrow().kind(),
-      self.cur_scope.borrow().kind()
-    );
-    Ok(self.cur_scope.clone())
+    if self.has_option(Options::Debug) {
+      println!(
+        "push_scope: {:?} -> {:?}",
+        last_scope.borrow().kind(),
+        self.cur_scope.borrow().kind()
+      );
+    }
+    self.cur_scope.clone()
   }
 
   fn pop_scope(&mut self) -> Result<NodePtr> {
     if self.cur_scope.borrow().parent().is_none() {
       return Err(Error::Unknown("no active scope".into()));
     }
+    if self.accu.trim().len() > 0 {
+      return Err(Error::Syntax(
+        format!("unprocessed expression: {}", self.accu),
+        self.location.clone(),
+      ));
+    }
     let parent = self.cur_scope.borrow().parent().clone().unwrap();
     let last_kind = self.cur_scope.borrow().kind().clone();
     self.cur_scope = parent;
-    println!(
-      "pop_scope: {:?} -> {:?}",
-      last_kind,
-      self.cur_scope.borrow().kind()
-    );
+    if self.has_option(Options::Debug) {
+      println!(
+        "pop_scope: {:?} -> {:?}",
+        last_kind,
+        self.cur_scope.borrow().kind()
+      );
+    }
     Ok(self.cur_scope.clone())
   }
 
@@ -337,6 +413,18 @@ impl Parser {
     self.accu.clear();
     Ok(())
   }
+
+  fn parse_expr(&mut self) -> Result<()> {
+    Ok(())
+  }
+
+  fn parse_lbracket(&self, _ch: char) -> Result<()> {
+    Ok(())
+  }
+
+  fn parse_rbracket(&self, _ch: char) -> Result<()> {
+    Ok(())
+  }
 }
 
 #[cfg(test)]
@@ -347,13 +435,13 @@ mod tests {
 
   #[test]
   fn function_parsing_works() {
-    let script = Script::new(
+    let mut script = Script::new(
       PathBuf::from("virtual://test"),
       Some("test"),
       Some("function hello(p1, p2) {\n\t\"\";}"),
     );
     let mut p = Parser::new(vec![Options::Debug]);
-    let ast = p.parse(&script).unwrap();
+    let ast = p.parse(&mut script).unwrap();
     let root = ast.root().clone();
     assert!(root.borrow().children().len() > 0);
     assert_ne!(root.borrow().children().first(), None);

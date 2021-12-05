@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fmt::Display, rc::Rc};
 
 use crate::location::Location;
 
@@ -14,7 +14,27 @@ pub enum NodeKind {
   Class,
   Enum,
   Method,
+
+  Assignment,
+
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+
+  Call,
+  Litteral,
+  ObjectLitteral,
+
   None,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Visibility {
+  Public,
+  Protected,
+  Private,
+  Package,
 }
 
 impl Default for NodeKind {
@@ -32,6 +52,7 @@ pub struct Node {
   name: Option<String>,
   location: Location,
   children: Vec<NodePtr>,
+  visiblity: Visibility,
   value: Option<Value>,
 }
 
@@ -47,6 +68,7 @@ impl Node {
       parent: None,
       kind,
       name: None,
+      visiblity: Visibility::Private,
       location: loc,
       children: vec![],
       value: None,
@@ -141,5 +163,16 @@ impl Node {
 
   pub fn value_mut(&mut self) -> &mut Option<Value> {
     &mut self.value
+  }
+}
+
+impl Display for Node {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let name = self.name().as_ref().unwrap_or(&String::new()).clone();
+    write!(f, "{:?}", self.kind)?;
+    if !name.is_empty() {
+      write!(f, " {}", name)?;
+    }
+    Ok(())
   }
 }

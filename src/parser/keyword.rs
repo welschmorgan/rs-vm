@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use enum_iterator::IntoEnumIterator;
 
-#[derive(IntoEnumIterator)]
+#[derive(IntoEnumIterator, Copy, Clone, Debug)]
 pub enum Keyword {
   Function,
   Class,
@@ -11,6 +11,9 @@ pub enum Keyword {
   Public,
   Private,
   Protected,
+  Throw,
+  Let,
+  Const
 }
 
 impl Display for Keyword {
@@ -26,6 +29,9 @@ impl Display for Keyword {
         Keyword::Public => "public",
         Keyword::Protected => "protected",
         Keyword::Private => "private",
+        Keyword::Throw => "throw",
+        Keyword::Let => "let",
+        Keyword::Const => "const",
       }
     )
   }
