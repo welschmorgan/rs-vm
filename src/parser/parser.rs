@@ -1,19 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use enum_iterator::IntoEnumIterator;
-
 use crate::error::Error;
 use crate::location::Location;
 use crate::result::Result;
 use crate::script::{Script, ScriptState};
 
-use super::{Keyword, Node, NodeKind, NodePtr, AST};
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Options {
-  Debug,
-}
+use super::{AST, Keyword, Node, NodeKind, NodePtr, ParserOption, Symbol};
 
 pub struct Parser {
   location: Location,
@@ -22,7 +15,7 @@ pub struct Parser {
   accu: String,
   quote: Option<char>,
   keywords: Vec<Keyword>,
-  options: Vec<Options>,
+  options: Vec<ParserOption>,
 }
 
 impl Default for Parser {
@@ -35,55 +28,13 @@ impl Default for Parser {
       accu: Default::default(),
       quote: Default::default(),
       keywords: Default::default(),
-      options: Default::default(),
+      options: ParserOption::from_env(),
     }
-  }
-}
-
-#[derive(IntoEnumIterator, Copy, Clone, PartialEq, Debug)]
-pub enum Symbol {
-  LParent,
-  RParent,
-  LBrace,
-  RBrace,
-  LBracket,
-  RBracket,
-  Comma,
-  SemiColon,
-  Tab,
-  Space,
-  NewLine,
-}
-
-impl Symbol {
-  pub fn repr(&self) -> char {
-    match *self {
-      Self::LParent => '(',
-      Self::RParent => ')',
-      Self::LBrace => '{',
-      Self::RBrace => '}',
-      Self::LBracket => '[',
-      Self::RBracket => ']',
-      Self::Comma => ',',
-      Self::SemiColon => ';',
-      Self::Tab => '\t',
-      Self::Space => ' ',
-      Self::NewLine => '\n',
-    }
-  }
-
-  pub fn parse(ch: char) -> Option<Symbol> {
-    for sym in Self::into_enum_iter() {
-      if sym.repr() == ch {
-        return Some(sym);
-      }
-    }
-    None
   }
 }
 
 impl Parser {
-  pub fn new(mut opts: Vec<Options>) -> Self {
+  pub fn new(mut opts: Vec<ParserOption>) -> Self {
     let mut p = Self::default();
     p.options.append(&mut opts);
     p
@@ -121,11 +72,11 @@ impl Parser {
     &mut self.keywords
   }
 
-  pub fn options(&self) -> &Vec<Options> {
+  pub fn options(&self) -> &Vec<ParserOption> {
     &self.options
   }
 
-  pub fn options_mut(&mut self) -> &mut Vec<Options> {
+  pub fn options_mut(&mut self) -> &mut Vec<ParserOption> {
     &mut self.options
   }
 
@@ -135,7 +86,7 @@ impl Parser {
     self.options = options;
   }
 
-  pub fn has_option(&self, o: Options) -> bool {
+  pub fn has_option(&self, o: ParserOption) -> bool {
     let found = self.options.iter().find(|it| (*it).eq(&o));
     found.is_some()
   }
@@ -155,9 +106,10 @@ impl Parser {
     *self.location.file_mut() = s.name().clone();
     *self.root_scope.borrow_mut().location_mut() = self.location.clone();
     let ch_it = s.content().unwrap().chars();
+    #[allow(unused_assignments)]
     let mut is_symbol = false;
     for ch in ch_it {
-      if self.has_option(Options::Debug) {
+      if self.has_option(ParserOption::Debug) {
         println!("parse: {}", ch);
       }
       if self.quote != None {
@@ -190,7 +142,7 @@ impl Parser {
       *self.location.column_mut() += 1;
     }
     *s.state_mut() = ScriptState::PARSED;
-    if self.has_option(Options::Debug) {
+    if self.has_option(ParserOption::Debug) {
       self.dump(self.root_scope.clone(), 0);
     }
     Ok(AST::new(self.root_scope.clone()))
@@ -221,7 +173,7 @@ impl Parser {
 
   fn parse_keyword(&mut self) -> Option<Keyword> {
     if self.accu.len() > 0 {
-      if self.has_option(Options::Debug) {
+      if self.has_option(ParserOption::Debug) {
         println!("parse kw: {:?}", self.accu);
       }
       if let Some(kw) = Keyword::parse(&self.accu) {
@@ -370,7 +322,7 @@ impl Parser {
       .create_child(kind, self.location.clone())
       .clone();
     *self.cur_scope.borrow_mut().parent_mut() = Some(last_scope.clone());
-    if self.has_option(Options::Debug) {
+    if self.has_option(ParserOption::Debug) {
       println!(
         "push_scope: {:?} -> {:?}",
         last_scope.borrow().kind(),
@@ -393,7 +345,7 @@ impl Parser {
     let parent = self.cur_scope.borrow().parent().clone().unwrap();
     let last_kind = self.cur_scope.borrow().kind().clone();
     self.cur_scope = parent;
-    if self.has_option(Options::Debug) {
+    if self.has_option(ParserOption::Debug) {
       println!(
         "pop_scope: {:?} -> {:?}",
         last_kind,
@@ -440,7 +392,7 @@ mod tests {
       Some("test"),
       Some("function hello(p1, p2) {\n\t\"\";}"),
     );
-    let mut p = Parser::new(vec![Options::Debug]);
+    let mut p = Parser::default();
     let ast = p.parse(&mut script).unwrap();
     let root = ast.root().clone();
     assert!(root.borrow().children().len() > 0);

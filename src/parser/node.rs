@@ -2,46 +2,7 @@ use std::{cell::RefCell, fmt::Display, rc::Rc};
 
 use crate::location::Location;
 
-use super::Value;
-
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-pub enum NodeKind {
-  Global,
-  Function,
-  FunctionParams,
-  FunctionParam,
-  FunctionImpl,
-  Class,
-  Enum,
-  Method,
-
-  Assignment,
-
-  Add,
-  Subtract,
-  Multiply,
-  Divide,
-
-  Call,
-  Litteral,
-  ObjectLitteral,
-
-  None,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Visibility {
-  Public,
-  Protected,
-  Private,
-  Package,
-}
-
-impl Default for NodeKind {
-  fn default() -> Self {
-    NodeKind::Global
-  }
-}
+use super::{NodeKind, Value, Visibility};
 
 pub type NodePtr = Rc<RefCell<Node>>;
 

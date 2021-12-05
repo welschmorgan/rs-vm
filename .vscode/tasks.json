@@ -8,6 +8,19 @@
         "$rustc"
       ],
       "label": "rust: cargo example: from_memory"
+    },
+    {
+      "type": "shell",
+      "command": "cargo run --example sandbox",
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "label": "rust: cargo example: sandbox",
+      "options": {
+        "env": {
+          "VM_PARSER_DEBUG": "on"
+        }
+      }
     }
   ],
   "presentation": {

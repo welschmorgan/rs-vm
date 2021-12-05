@@ -1,7 +1,6 @@
-use std::time::Duration;
 use std::{path::Path};
 
-use crate::parser::{AST, NodePtr, Options, Parser};
+use crate::parser::{AST, NodePtr, Parser};
 use crate::script::{Script, ScriptState};
 use crate::result::Result;
 
@@ -76,7 +75,7 @@ impl Vm {
 
   #[allow(unreachable_code)]
   pub fn run(&mut self) -> Result<()> {
-    let mut p = Parser::new(vec![Options::Debug]);
+    let mut p = Parser::default();
     for mut script in self.scripts.iter_mut() {
       if *script.state() == ScriptState::INITIAL {
         script.load()?;

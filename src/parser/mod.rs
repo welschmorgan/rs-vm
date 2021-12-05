@@ -5,6 +5,10 @@ pub mod value;
 pub mod ast;
 pub mod op_code;
 pub mod variable;
+pub mod node_kind;
+pub mod visibility;
+pub mod symbol;
+pub mod options;
 
 pub use parser::*;
 pub use node::*;
@@ -13,3 +17,7 @@ pub use value::*;
 pub use ast::*;
 pub use op_code::*;
 pub use variable::*;
+pub use node_kind::*;
+pub use visibility::*;
+pub use symbol::*;
+pub use options::*;
