@@ -6,7 +6,7 @@ use crate::location::Location;
 use crate::result::Result;
 use crate::script::{Script, ScriptState};
 
-use super::{AST, Keyword, Node, NodeKind, NodePtr, ParserOption, Symbol};
+use super::{AST, Keyword, Node, NodeKind, NodePtr, ParserOption, Symbol, Value};
 
 pub struct Parser {
   location: Location,
@@ -112,10 +112,8 @@ impl Parser {
       if self.has_option(ParserOption::Debug) {
         println!("parse: {}", ch);
       }
-      if self.quote != None {
+      if self.quote.is_some() && ch != Symbol::DoubleQuote.repr() && ch != Symbol::SingleQuote.repr() {
         self.accu.push(ch);
-      } else if ch == '\'' || ch == '"' {
-        self.parse_quote(ch)?;
       } else {
         is_symbol = false;
         if let Some(sym) = Symbol::parse(ch) {
@@ -127,6 +125,7 @@ impl Parser {
             Symbol::RBrace => self.parse_rbrace(ch),
             Symbol::LBracket => self.parse_lbracket(ch),
             Symbol::RBracket => self.parse_rbracket(ch),
+            Symbol::DoubleQuote | Symbol::SingleQuote => self.parse_quote(ch),
             Symbol::Comma => self.parse_comma(ch),
             Symbol::SemiColon => self.parse_semicolon(ch),
             Symbol::Tab | Symbol::Space => self.parse_space(ch),
@@ -203,26 +202,10 @@ impl Parser {
     None
   }
 
-  fn parse_comma(&mut self, _ch: char) -> Result<()> {
-    if *self.cur_scope.borrow().kind() == NodeKind::FunctionParams {
-      if self.accu.trim().len() == 0 {
-        return Err(Error::Syntax(
-          "unexpected ','".into(),
-          self.location.clone(),
-        ));
-      }
-      self.push_fn_param()?;
-    } else {
-      return Err(Error::Syntax(
-        "unexpected ','".into(),
-        self.location.clone(),
-      ));
-    }
-    Ok(())
-  }
 
   fn parse_lparen(&mut self, _ch: char) -> Result<()> {
     if *self.cur_scope.borrow().kind() == NodeKind::Function {
+      // parse function declaration
       if self.accu.len() > 0 {
         // register function name if given
         *self.cur_scope.borrow_mut().name_mut() = Some(self.accu.clone());
@@ -243,6 +226,18 @@ impl Parser {
         ));
       }
       self.push_scope(NodeKind::FunctionParams);
+    } else {
+      // parse function call
+      self.accu = self.accu.trim().to_string();
+      if self.accu.is_empty() {
+        return Err(Error::Syntax(
+          "unexpected '('".into(),
+          self.location.clone()
+        ));
+      }
+      let func = self.push_scope(NodeKind::Call);
+      *func.borrow_mut().name_mut() = Some(self.accu.clone());
+      self.accu.clear();
     }
     Ok(())
   }
@@ -251,6 +246,13 @@ impl Parser {
     if *self.cur_scope.borrow().kind() == NodeKind::FunctionParams {
       if self.accu.trim().len() != 0 {
         self.push_fn_param()?;
+      }
+    } else if self.cur_scope_kind() == NodeKind::Call {
+      self.accu = self.accu.trim().to_string();
+      if !self.accu.is_empty() {
+        let param = self.cur_scope.borrow_mut().create_child(NodeKind::FunctionParam, self.location.clone()).clone();
+        *param.borrow_mut().value_mut() = Some(Value::String(self.accu.clone()));
+        self.accu.clear();
       }
     }
     self.pop_scope()?;
@@ -274,6 +276,10 @@ impl Parser {
     if !self.accu.is_empty() {
       self.parse_expr()?;
     }
+    if self.cur_scope_kind() == NodeKind::FunctionImpl {
+      // pop 2 scopes: FunctionImpl and Function
+      self.pop_scope()?;
+    }
     self.pop_scope()?;
     Ok(())
   }
@@ -282,9 +288,34 @@ impl Parser {
     self.accu.trim().len() == 0
   }
 
+  fn parse_comma(&mut self, _ch: char) -> Result<()> {
+    if *self.cur_scope.borrow().kind() == NodeKind::FunctionParams {
+      if self.accu.trim().len() == 0 {
+        return Err(Error::Syntax(
+          "unexpected ','".into(),
+          self.location.clone(),
+        ));
+      }
+      self.push_fn_param()?;
+    } else if self.cur_scope_kind() == NodeKind::Call {
+      let param = self.cur_scope.borrow_mut().create_child(NodeKind::FunctionParam, self.location.clone()).clone();
+      *param.borrow_mut().value_mut() = Some(Value::String(self.accu.clone()));
+      self.accu.clear();
+    } else {
+      return Err(Error::Syntax(
+        "unexpected ','".into(),
+        self.location.clone(),
+      ));
+    }
+    Ok(())
+  }
+
   fn parse_semicolon(&mut self, _ch: char) -> Result<()> {
     if !self.accu_empty() {
       self.parse_expr()?;
+    }
+    if self.cur_scope_kind() == NodeKind::Function && self.cur_scope().borrow().child_by_kind(NodeKind::FunctionImpl).is_none() {
+      *self.cur_scope.borrow_mut().kind_mut() = NodeKind::Call;
     }
     self.keywords.clear();
     Ok(())

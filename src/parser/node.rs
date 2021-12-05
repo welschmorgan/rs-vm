@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Display, rc::Rc};
+use std::{borrow::BorrowMut, cell::RefCell, fmt::Display, rc::Rc};
 
 use crate::location::Location;
 
@@ -94,6 +94,15 @@ impl Node {
       .map(|child| child.clone())
   }
 
+  pub fn children_by_kind(&self, k: NodeKind) -> Vec<NodePtr> {
+    self
+      .children
+      .iter()
+      .filter(|child| *child.borrow().kind() == k)
+      .map(|child| child.clone())
+      .collect()
+  }
+
   pub fn child_by_name<S: AsRef<str>>(&self, n: S) -> Option<NodePtr> {
     self
       .children
@@ -108,6 +117,14 @@ impl Node {
 
   pub fn parent_mut(&mut self) -> &mut Option<NodePtr> {
     &mut self.parent
+  }
+
+  pub fn root(&self) -> Option<NodePtr> {
+    let mut root = self.parent.clone();
+    while root.is_some() && root.as_ref().unwrap().borrow().parent().is_some() {
+      root = root.unwrap().borrow().parent().clone();
+    }
+    root
   }
 
   pub fn location(&self) -> &Location {
@@ -129,10 +146,12 @@ impl Node {
 
 impl Display for Node {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let name = self.name().as_ref().unwrap_or(&String::new()).clone();
     write!(f, "{:?}", self.kind)?;
-    if !name.is_empty() {
-      write!(f, " {}", name)?;
+    if self.name.is_some() {
+      write!(f, " {}", self.name.clone().unwrap())?;
+    }
+    if self.value.is_some() {
+      write!(f, " -> {}", self.value.clone().unwrap())?;
     }
     Ok(())
   }

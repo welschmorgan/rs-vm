@@ -18,7 +18,7 @@
       "label": "rust: cargo example: sandbox",
       "options": {
         "env": {
-          "VM_PARSER_DEBUG": "on"
+          "VM_PARSER_DEBUG": "off"
         }
       }
     }

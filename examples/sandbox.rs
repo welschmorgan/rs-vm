@@ -11,11 +11,17 @@ fn main() {
     "virtual://test_script",
     Some("test_script"),
     Some(
-      "function hello_world() {
-  print(\"Hello!\");
-}
+      "
+      function hello_world() {
+        print(\"Hello!\");
+      }
 
-hello_world();",
+      function hello_world2(a) {
+        print(a);
+      }
+      
+      hello_world();
+      hello_world2(\"test\");",
     ),
   ));
 

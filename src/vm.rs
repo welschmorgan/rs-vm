@@ -78,9 +78,11 @@ impl Vm {
     let mut p = Parser::default();
     for mut script in self.scripts.iter_mut() {
       if *script.state() == ScriptState::INITIAL {
+        println!("Load Script: {}", script.name());
         script.load()?;
       } 
       if *script.state() == ScriptState::LOADED {
+        println!("Parse Script: {}", script.name());
         self.asts.push(p.parse(&mut script)?);
       }
     }
