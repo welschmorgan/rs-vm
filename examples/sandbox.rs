@@ -13,11 +13,11 @@ fn main() {
     Some(
       "
       function hello_world() {
-        print(\"Hello!\");
+        println(\"Hello!\");
       }
 
       function hello_world2(a) {
-        print(a);
+        println(a);
       }
       
       hello_world();

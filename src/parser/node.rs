@@ -103,6 +103,54 @@ impl Node {
       .collect()
   }
 
+  pub fn ancestors(&self) -> Vec<NodePtr> {
+    let mut ret: Vec<NodePtr> = vec![];
+    match self.parent.clone() {
+      Some(p) => {
+        ret.push(p.clone());
+        for ancestor in p.borrow().ancestors() {
+          ret.push(ancestor);
+        }
+      }
+      None => {}
+    }
+    ret
+  }
+
+  pub fn ancestors_by_kind(&self, k: NodeKind) -> Vec<NodePtr> {
+    self
+      .ancestors()
+      .iter()
+      .filter(|a| *a.borrow().kind() == k)
+      .map(|a| a.clone())
+      .collect()
+  }
+
+  pub fn ancestors_by_name<S: AsRef<str>>(&self, n: S) -> Vec<NodePtr> {
+    self
+      .ancestors()
+      .iter()
+      .filter(|a| *a.borrow().name() == Some(n.as_ref().to_string()))
+      .map(|a| a.clone())
+      .collect()
+  }
+
+  pub fn ancestor_by_kind(&self, k: NodeKind) -> Option<NodePtr> {
+    self
+      .ancestors()
+      .iter()
+      .find(|a| *a.borrow().kind() == k)
+      .map(|a| a.clone())
+  }
+
+  pub fn ancestor_by_name<S: AsRef<str>>(&self, n: S) -> Option<NodePtr> {
+    self
+      .ancestors()
+      .iter()
+      .find(|a| *a.borrow().name() == Some(n.as_ref().to_string()))
+      .map(|a| a.clone())
+  }
+
   pub fn child_by_name<S: AsRef<str>>(&self, n: S) -> Option<NodePtr> {
     self
       .children

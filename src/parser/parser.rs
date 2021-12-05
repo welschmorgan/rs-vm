@@ -365,7 +365,7 @@ impl Parser {
 
   fn pop_scope(&mut self) -> Result<NodePtr> {
     if self.cur_scope.borrow().parent().is_none() {
-      return Err(Error::Unknown("no active scope".into()));
+      return Err(Error::Unknown("no active scope".into(), Some(self.location.clone())));
     }
     if self.accu.trim().len() > 0 {
       return Err(Error::Syntax(
